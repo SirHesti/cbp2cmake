@@ -1,2 +1,5 @@
-# cbp2cmake
-Create CMakeLists.txt from 
+
+#### ___This is great Software___
+* fine Comments
+* extra code
+* all lowercase
