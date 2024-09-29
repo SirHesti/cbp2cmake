@@ -16,7 +16,7 @@
 -m ../cb_console_runner/CMakeLists.txt -c ../cb_console_runner/cb_console_runner.cbp -r -t Release -p /tmp
 -m ../hsim/CMakeLists.txt -c ../hsim/hsim.cbp -r -t Release  -p /tmp
 -m ../../gui/hsvc/CMakeLists.txt -c ../../gui/hsvc/hsvc.cbp -r -t Release -p /tmp
-
+-m ../hswatchd/CMakeLists.txt -c ../hswatchd/hswatchd.cbp -r -t Release  -p /tmp
 
 --[ Revision ]-------------------------------------------------------------------------------------
 
@@ -27,6 +27,8 @@
  ** 08.04.24 HS Version geht nicht reibungsfrei ist aber auch nicht notwendig, niceToHave
  ** 09.04.24 HS tcc geht derzeit nicht.
  ** 10.04.24 HS directory's aus hsinstall interpretieren
+ ** 14.04.24 HS git -g und -f mit app.ini statt .git
+ ** 25.04.24 HS add cfgThreadsLib option
 
 ************************************************************************************************ */
 
@@ -42,14 +44,16 @@ char *cfgCodeBlocksProjectFile=NULL;                        // Name ist auch Pro
 char *cfgTarget=NULL;                                       // Release Debug o.ä.
 char *cfgOutputName=NULL;                                   // im Prinzip die EXE
 char *cfgCMakeFile=NULL;                                    // CMakeFile
+bool cfgReplaceOutPut=false;                                // CMakeFile.txt überschreiben, falls vorhanden
 char *cfgDestOpt=NULL;                                      // wohin soll das File nach der Fertigstellung (hsinstall)
 char *cfgDestPath=NULL;                                     // Verzeichnis wohin das File geschrieben wird.
-char *cfgGitFilelist=NULL;                                  // möglicher .git/filelist oder aber wie angegeben
-bool cfgReplaceOutPut=false;                                // CMakeFile.txt überschreiben, falls vorhanden
+char *cfgGitFilelist=NULL;                                  // möglicher app.ini oder aber wie angegeben
+bool cfgCMake4Git=false;                                    // Standard schreiben ... bei true "GitVersion"
 
 bool cfgWXlib=false;                                        // gefunden: <Add option="`wx-config`"
 bool cfgCairoLib=false;                                     // gefunden: <Add library="cairo"
 bool cfgSqlite3Lib=false;                                   // gefunden: <Add library="sqlite3"
+bool cfgThreadsLib=false;                                   // gefunden: <Add option=-pthread"
 bool cfgCTCC=false;                                         // tcc statt gcc - geht leider so nicht
 
 char **Defines=NULL;                                        // -DBigBossCode gefunden
@@ -58,14 +62,15 @@ char **Dirs=NULL;                                           // Include Verzeichn
 //char **Libs=NULL;                                         // einzeln gemacht, nicht global
 
 
-int HELP(void){    // ab  efg ijkl no q s uvwxyz
-    printf (" -m <filename>   \"CMakeLists.txt\" default\n");
+int HELP(void){    // ab  e   ijklmn  q s uvwxyz
+    printf (" -o <filename>   \"CMakeLists.txt\" default\n");
     printf (" -c <filename>   *.cbp-FileName to use\n");
     printf (" -p /save/to/dir dflt: use from projectfile from hsinstall\n");
     printf (" -t <target>     Target to Build [dft: Release]\n");
     printf (" -r              Replace OutputFile\n");
-    printf (" -f <gitfile>    .git/filelist writeout. if ARG missing, then \".git/filelist\" used\n");
-    printf (" -h              Help\n");
+    printf (" -f <gitfile>    filelist writeout. if ARG missing, then \"git/filelist\" used\n");
+    printf (" -g              GitVersion without inlcudes\n");
+    printf (" -h/-?/--help    Help\n");
     return 0;
 }
 
@@ -117,6 +122,29 @@ int RemoveUsedStuffFromString(char *str)
     }
     strunquote(str);
     return EXIT_SUCCESS;
+}
+
+// Name ohne Include
+int IncludedNameToBase(char *shadow)
+{
+    int f,k,sz;
+    for (;;)
+    {
+        f=0;
+        if (!Dirs) return EXIT_FAILURE;
+        for (k=0;Dirs[k];k++)
+        {
+            sz = strlen(Dirs[k]);
+            if (!sz) break;
+            if (!strncmp(Dirs[k],shadow,sz))
+            {
+                strdel(shadow,0,sz);
+                if (shadow[0]==cDIR_SEP) strdel(shadow,0,1);
+                f++;
+            }
+        }
+        if (!f) return EXIT_SUCCESS;
+    }
 }
 
 // cbp lesen und interpretieren
@@ -224,6 +252,14 @@ int readCBP(void)
 #endif
             Dirs=strlstadd(Dirs,strdup_ex(rs->nextline));
             continue;
+        }
+
+        if (!strncasecmp(rs->nextline,"<Add option=\"-pthread",21))
+        {
+#ifdef HS_DEBUG
+            printf ("*: opt : %s\n", rs->nextline);
+#endif
+            cfgThreadsLib=true;
         }
 
         if (!strncasecmp(rs->nextline,"<Add option=\"-D",15))
@@ -352,6 +388,7 @@ int WriteCmakeFile(void)
     int flag_cpp=0;
     int i;
 
+    if (!cfgCMakeFile) return True;
     if ((FileOK(cfgCMakeFile)) && (!cfgReplaceOutPut))
     {
         printf ("%s File exist -- ", cfgCMakeFile);
@@ -454,7 +491,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
         return False;
     }
     fprintf (F,"set (CMAKE_INSTALL_PREFIX /%s )\n", prefix);
-    if (Dirs)
+    if ((Dirs) && (cfgCMake4Git==false))
     {
 //        if (Dirs[1])
 //        {
@@ -487,11 +524,29 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
             prefix = CfilenameExt(Files[i]);
             if (!strcmp(prefix,"h")) continue;
             if (!strcmp(prefix,"hpp")) continue;
+            if (!strcmp(prefix,"md")) continue;
+            if (!strcmp(prefix,"txt")) continue;
             if (!strcmp(prefix,"wxs")) continue;
-            fprintf (F," %s",Files[i]);
+            if (cfgCMake4Git==false)
+            {
+                fprintf (F," %s",Files[i]);
+            }else{
+                char myshadow[PATH_MAX];
+                strcpy_ex(myshadow,Files[i]);
+                IncludedNameToBase(myshadow);
+                fprintf (F," %s",myshadow);
+            }
         }
     }
     fprintf (F,")\n");
+
+    if (cfgThreadsLib)
+    {
+        //fprintf(F,"set(CMAKE_THREAD_PREFER_PTHREAD TRUE)\n");
+        //fprintf(F,"set(THREADS_PREFER_PTHREAD_FLAG TRUE)\n");
+        fprintf(F,"find_package(Threads REQUIRED)\n");
+        fprintf(F,"target_link_libraries(%s ${CMAKE_THREAD_LIBS_INIT})\n",Cbasename(cfgOutputName));
+    }
     if (cfgSqlite3Lib)
     {
         fprintf(F,"find_package(SQLite3)\n");
@@ -538,28 +593,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
     return True;
 }
 
-int IncludedNameToBase(char *shadow)
-{
-    int f,k,sz;
-    for (;;)
-    {
-        f=0;
-        if (!Dirs) return EXIT_FAILURE;
-        for (k=0;Dirs[k];k++)
-        {
-            sz = strlen(Dirs[k]);
-            if (!sz) break;
-            if (!strncmp(Dirs[k],shadow,sz))
-            {
-                strdel(shadow,0,sz);
-                if (shadow[0]==cDIR_SEP) strdel(shadow,0,1);
-                f++;
-            }
-        }
-        if (!f) return EXIT_SUCCESS;
-    }
-}
-
 int WriteGitFilelist(void)
 {
     int i;
@@ -567,20 +600,69 @@ int WriteGitFilelist(void)
     char dirname [PATH_MAX];
     char file    [PATH_MAX];
     char shadow  [PATH_MAX];
-    strcpy(dirname,Cdirvault(cfgGitFilelist));
 
+    char **oldfile;
+    frall_t *rs;
+
+    strcpy(dirname,Cdirvault(cfgGitFilelist));
+    if (!DirOK(dirname)) createdir(dirname);
     if (!DirOK(dirname))
     {
         lprintf ("Dir %s not found; need to write %s", dirname, cfgGitFilelist);
         return EXIT_FAILURE;
     }
+
+    oldfile=NULL;
+    rs = fread_all(cfgGitFilelist);
+    if (rs)
+    {
+        for (i=0;!fread_all_getline(rs);)
+        {
+            if (rs->nextline[0]=='[')
+            {
+                if (!strcmp(rs->nextline,"[filelist]")) i=1;
+                else i=0;
+            }
+            if (!i) oldfile=strlstadd(oldfile,strdup_ex(rs->nextline));
+        }
+        fread_all_close(rs);
+        // remove empty lines at the end of the old file
+//#ifdef HS_DEBUG
+//        char *dbg __attribute__ ((unused)) ;
+//#endif // HS_DEBUG
+        if (oldfile)
+        {
+            for (i=0;oldfile[i];i++);
+            for (i--;i>=0;i--)
+            {
+//    #ifdef HS_DEBUG
+//                dbg=oldfile[i];
+//    #endif
+                if (*oldfile[i]!='\0') break;
+                oldfile[i]=free0(oldfile[i]);
+            }
+        }
+    }
+
 // fopen to write
     if ((F = fopen(cfgGitFilelist,"wt"))==NULL)
     {
         printf ("%s File can't write -- ", cfgGitFilelist);
         return EXIT_FAILURE;
     }
-// write them
+    if (oldfile)
+    {
+        for (i=0;oldfile[i];i++)
+        {
+//#ifdef HS_DEBUG
+//            dbg=oldfile[i];
+//#endif
+            fprintf (F, "%s\n", oldfile[i]);
+        }
+    }
+    strlstfree(oldfile);
+    fprintf (F, "\n[filelist]\n");
+// write the new ones
     for (i=0;Files[i];i++)
     {
         strcpy (file, Files[i]);
@@ -588,8 +670,9 @@ int WriteGitFilelist(void)
         IncludedNameToBase(shadow);
         strquote(shadow);
         strquote(file);
-        fprintf (F, "%s %s\n", shadow, file);
+        fprintf (F, "%s=%s\n", shadow, file);
     }
+    fprintf (F, "\n");
 //close
     fclose(F);
     return EXIT_SUCCESS;
@@ -603,15 +686,17 @@ signed int main(int argc, char *argv[])
     if (aChkARG("c")) if(ARG)cfgCodeBlocksProjectFile = strdup_ex(ARG);
     if (aChkARG("t")) if(ARG)cfgTarget                = strdup_ex(ARG);
     if (aChkARG("p")) if(ARG)cfgDestPath              = strdup_ex(ARG);
-    if (aChkARG("m")) if(ARG)cfgCMakeFile             = strdup_ex(ARG);
+    if (aChkARG("o")) if(ARG)cfgCMakeFile             = strdup_ex(ARG);
+    if (aChkARG("g")) cfgCMake4Git = true;
     if (aChkARG("f"))
     {
         if(ARG) cfgGitFilelist   = strdup_ex(ARG);
-        else    cfgGitFilelist   = strdup_ex(".git/filelist");
+        else    cfgGitFilelist   = strdup_ex("app.ini");
     }
 
     if (aChkARG("r")) cfgReplaceOutPut = true;
     if (!cfgCMakeFile) cfgCMakeFile = strdup_ex("CMakeLists.txt");
+    if (!strcmp(cfgCMakeFile,"-")) cfgCMakeFile=free0(cfgCMakeFile);
 
     if (!cfgCodeBlocksProjectFile) cfgCodeBlocksProjectFile=findfirstfile(".","*.cbp");
     if (!FileOK(cfgCodeBlocksProjectFile)) return 255|cleanup()|printf("cbp-File not found");
@@ -619,21 +704,12 @@ signed int main(int argc, char *argv[])
     if (cfgGitFilelist) if (WriteGitFilelist()) return 255|cleanup();
     if (!cfgOutputName) return 255|cleanup()|printf("no OutputFile found - use -o Option");
 
-    //-----
-    //relocate for Git(hub)
-    // GIT-export-dir
-    //   ->sources
-    //   ->..tools...
-    //   ->includes
-    // README.md -> readme.txt   ( maybe -> pandoc )
-    //------------------------------
-
     //write CMakeFile.txt
     if (!WriteCmakeFile()) return 255|cleanup()|printf("cMakeFile not or wrong");
     printf ("Done\n");
     //printf ("Result=%s\n",cfgCodeBlocksProjectFile);
 #ifdef HS_DEBUG
-    if (FileOK(cfgCMakeFile))
+    if (cfgCMakeFile) if (FileOK(cfgCMakeFile))
     {
         char *p;
         p = strprintf("cat %s", cfgCMakeFile);

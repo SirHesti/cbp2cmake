@@ -767,6 +767,7 @@ int arg_unused_print(int argc, char *argv[])
 {
     int i;
     int e;
+    if (!arg_used) return 0;
 	if (arg_GetNext(0,argc)==-1) return 0;
     for (i=0,e=0;;e++)
     {
@@ -776,6 +777,34 @@ int arg_unused_print(int argc, char *argv[])
     }
     return e;
 }
+
+
+/**
+ @brief Ersten ungenutzen Parameter finden
+ @return  0 nichts gefunden 1-x Fundtstelle
+
+___[ Revision ]______________________________________________________________
+
+ ** 26.06.24 HS Create
+___________________________________________________________________________*/
+
+int ChkParUnused (char *Find, int arguc, char *arguv[])
+{
+    int i,b;
+//    ARG=NULL; schon vorher fertig
+    if (!arg_used) return 0;
+    for (b=0;;b++)
+    {
+        i = arg_GetNext(0,arguc);
+        if (i<0) break;
+        if (Find[2]=='-') if (ChkPar(arguv[i][0])) continue;
+        ARG = arguv[i];
+        arg_used[i]=1;
+        return i+1;
+    }
+    return 0;
+}
+
 
 #ifdef old_pars_version
 #ifdef OS_WINDOWS
@@ -811,9 +840,13 @@ int ChkPar(int val)
  @brief Mainparameter #1 bis # #9999 sh. ohne ParameterSlashes. Beim ersten Parameter der mit ChkPar gefunden wird abgebrochen
  @return  0 nichts gefunden 1-x Fundtstelle
 
+ #1 ist der Programmname selbst = argv[0]
+ #2 ist der erste Parameter der an das Programm übergeben wird
+
 ___[ Revision ]______________________________________________________________
 
  ** 13.01.19 HS Create
+ ** 05.09.24 HS arg_used wird verwendet
 ___________________________________________________________________________*/
 
 int ChkParMain (char *Find, int arguc, char *arguv[])
@@ -833,6 +866,7 @@ int ChkParMain (char *Find, int arguc, char *arguv[])
         if (numToFind==(PosIHave+1))                                            // Wenn gefunden Fundstelle mitteilen (1-xxx)
         {
             ARG = src;
+            if (arg_used) arg_used[PosIHave]=1;
             return numToFind;
         }
     }
@@ -944,9 +978,9 @@ int ChkARGwStart(char *Find, int start, int arguc, char *arguv[])
     singlePar = 0;
     numPar = 0;
 
+    if ((Find[0]=='*')&&(Find[1]=='*')) return ChkParUnused(Find, arguc, arguv); // Mainparameter ** ersten unbenutzen finden wenn find[2]- dann auch slashparameter
     if (Find[0]=='#') return ChkParMain (Find, arguc, arguv);                   // Mainparameter #0 bis # #9999 sh. ohne ParameterSlashes
     if (Find[0]=='$') return ChkParWos  (Find, arguc, arguv);                   // Mainparameter $0 bis $9999 sh. ohne ParameterSlashes
-
     if (Find[0]=='.')
     {
         singlePar = 1;
@@ -1011,10 +1045,17 @@ int ChkARGwStart(char *Find, int start, int arguc, char *arguv[])
         {
             if ((p+1)<arguc)                                                    // Gibt es noch Parameter ?
             {
+//                if ((!ChkPar(arguv[p+1][0])) || ( (ChkPar(arguv[p+1][0]) && (arguv[p+1][1]==0))))                                    // Ist es auch kein anderer Parameter ?
                 if (!ChkPar(arguv[p+1][0]))                                     // Ist es auch kein anderer Parameter ?
                 {
                     if (arg_used) arg_used[p+1]=1;                              // setzen falls vorhanden
                     ARG = arguv[p+1];                                           // Parameter zur Argument machen
+                }else{
+                    if (arguv[p+1][1]==0)
+                    {
+                        if (arg_used) arg_used[p+1]=1;
+                        ARG = arguv[p+1];
+                    }
                 }
             }
         }else{
@@ -3160,29 +3201,64 @@ char *strstrarg (char *STRING, int arg, char STRARG_DEL)
 /**
  @brief String in umkehren
  @param str der gekehrt werden soll
+ @return str aber umgekehrt, orginalstr wird zerstört
 
 ___[ Revision ]______________________________________________________________
 
  ** 23.07.16 HS ReCreate
+ ** 04.05.24 HS return pointer of str
 ___________________________________________________________________________*/
 
-void revstr (char *str)
+char* revstr (char *str)
 {
     int l,r;
     char d;
 
-    if (!str) return;
+    if (!str) return NULL;
     r = strlen(str);
-    if (r<2) return;
+    if (r<2) return str;
     r--;
     for (l=0;;l++,r--)
     {
-        if (l>r) return;
+        if (l>r) return str;
         d = str[l];
         str[l]=str[r];
         str[r]=d;
     }
+    return str;
 }
+
+/**
+ @brief memory umkehren
+ @param mem der gekehrt werden soll
+ @return mem aber umgekehrt, orginal wird zerstört
+
+___[ Revision ]______________________________________________________________
+
+ ** 04.05.24 HS founded
+___________________________________________________________________________*/
+
+void *revmem (void *mem, size_t sz)
+{
+    int l;
+    int r;
+    unsigned char *src;
+    unsigned char *rslt;
+    if (!mem) return NULL;
+    r = sz;
+    if (r<2) return mem;
+    r--;
+    src = mem;
+    rslt = malloc_temp(sz+1);
+    for (l=0;;l++,r--)
+    {
+        if (l>r) return rslt;
+        rslt[l] = src[r];
+        rslt[r] = src[l];
+    }
+    return rslt;
+}
+
 ///@}
 
 /* *******************************************************************************************************************/
@@ -3726,6 +3802,35 @@ char *strtohexstr(char* from, size_t size, size_t bytes_per_line, int format )
         if (format!=0) stradd (rslt,"\n");                                      // Zeilen Ende!!
     }
     return malloc_temp_string(rslt);
+}
+
+/**
+ @brief Konvertiert einen String in einen HexString
+ @return hexconverted string
+ @param string Die zu bearbeitende Zeichenkette
+
+___[ Revision ]______________________________________________________________
+
+ **  04.05.24 HS Create
+___________________________________________________________________________*/
+
+const char hexstatic[17] = "0123456789abcdef";
+char *strhex(void *str, size_t sz)
+{
+    unsigned int v;
+    int p,i;
+    char *rslt;
+    char *src;
+    rslt = malloc_temp((sz*2)+1);
+    src = str;
+    for (i = sz-1; i >= 0; i--)
+    {
+        p = i * 2;
+        v = (unsigned char) src[i];
+        rslt[p + 1] = hexstatic[v % 16];
+        rslt[p + 0] = hexstatic[v / 16];
+    }
+    return rslt;
 }
 
 /**
@@ -6376,6 +6481,19 @@ time_t ParseAnyDate(char *ostr)
     if (*str < '0')  return PARSEANYDATE_ERROR;                                 // Fetch first arg from datestring
     if (*str > '9')
     {
+//        for (c1=0;;c1++<_countof(MON))
+//
+//
+//    for (c3=0;;c3++)                                                            // must be fit into the
+//    {
+//        if (MONNAMES[c3].mon==0) return PARSEANYDATE_ERROR;
+//        if (!strcasecmp(cpy, MONNAMES[c3].name))
+//        {
+//            tm.tm_mon = MONNAMES[c3].mon-1;
+//            break;
+//        }
+//    }
+//
 	    if ((!isupper ((int)str[0]) && !islower ((int)str[0])) ||               // Weekday names must be 3 chars
             (!isupper ((int)str[1]) && !islower ((int)str[1])) ||
             (!isupper ((int)str[2]) && !islower ((int)str[2])))
@@ -7183,6 +7301,24 @@ ___________________________________________________________________________*/
 
 int getach(void)
 {
+
+#ifdef OS_LINUX_WAIT_KEY_VARIANTE
+#include <termios.h>
+char get_key_noecho() {              /* Abfrage der Tastatur ohne Echo */
+    struct termios original, rawmodus;
+    char ein;
+    /* (STDIN_FILENO ist immer 0) */
+    tcgetattr(STDIN_FILENO, &original);
+    rawmodus = original;
+    rawmodus.c_lflag &= ~ICANON;
+    rawmodus.c_lflag &= ~ECHO;
+    tcsetattr(STDIN_FILENO,TCSAFLUSH,&rawmodus);
+    ein = getc(stdin);
+    tcsetattr(STDIN_FILENO,TCSAFLUSH,&original);
+    return ein;
+}
+#endif // OS_LINUX
+
 #ifdef OS_LINUX
     fd_set      rfds;
     int         fd;
@@ -7192,7 +7328,6 @@ int getach(void)
     char        c[2];
 
     /* Watch stdin (fd 0) to see when it has input. */
-
     fd = fileno(stdin);
     FD_ZERO(&rfds);
     FD_SET(fd, &rfds);
@@ -8686,7 +8821,7 @@ t_opt db_opt[]={
     { opt_RCdir_HSDIR_var, "%HSDIR%/var" },
     { opt_RCdir_root_var , "%APPDATA%/hs" },
 #else //OS_LINUX
-    { opt_RCdir_PRG      , "" },
+    { opt_RCdir_PRG      , "%ARG0%" },
     { opt_RCdir_CFGDIR   , "%CFGDIR%" },
     { opt_RCdir_root_etc , "/etc" },
     { opt_RCdir_root_etcd, "/etc/%prgname%.d" },
@@ -8729,7 +8864,7 @@ t_opt db_opt[]={
 | opt_RCdir_must_exist | File muss beim Suchen existieren          ||
 | <b> </b>             | **Linux**             | **Windows**       |
 | opt_RCdir_PathFile   | Pfad und Filename in filename uebergeben  ||
-| opt_RCdir_PRG        | not Allowed           | ./.**             |
+| opt_RCdir_PRG        | ./.** [.rc] zB /opt/xxx | ./.**             |
 | opt_RCdir_CFGDIR     | from /etc/hsrc        | \%HSDIR%/etc/hsrc or \%APPDATA%/hs/hsrc |
 | opt_RCdir_root_etc   | /etc/.**              | \%APPDATA%/hs/.** |
 | opt_RCdir_root_etcd  | /etc/\%prgname%.d/.** | \%APPDATA%/hs/%prgname%/.** |
@@ -8745,6 +8880,8 @@ ___[ Revision ]______________________________________________________________
  ** 11.11.22 HS opt und rcreadfile übertragen, wenn angegeben
  ** 15.11.22 HS Pfade nicht mehr einzeln auswerten, sonden ueber die Tabelle
  ** 18.11.22 HS Nochmal komplett Ueberarbeitet. PCreadPath
+ ** 25.04.24 HS Linux: opt_RCdir_PRG kann im Verzeichnis des Programs liegen
+                zB. beim Test oder falls das Programm in /opt gestartet wird
 ___________________________________________________________________________*/
 
 void *RCread(int opt, char *rcreadfile, char *filename)

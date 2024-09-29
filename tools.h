@@ -256,6 +256,7 @@ usw.
 #include <unistd.h>
 #include <utime.h>
 #include <syslog.h>
+//#include <termios.h>
 #endif // OS_LINUX
 
 
@@ -355,7 +356,6 @@ extern "C" {
 #ifndef FALSE
 #define FALSE false
 #endif
-
 #ifndef TRUE
 #define TRUE true
 #endif
@@ -858,11 +858,13 @@ enum STRHEX{
     STRHEX_NOZERO = 4,
 };
 char *strtohexstr(char* from, size_t size, size_t bytes_per_line, int format );
+char *strhex(void *str, size_t sz);
 
 typedef uint32_t ipv4_t;                                                        // string in ipv4 umrechnen
 ipv4_t getipv4(char *src);
 char *binstr( unsigned int num );
-void revstr (char *str);
+char *revstr (char *str);
+void *revmem (void *mem, size_t sz);
 
 int GetIntTrueFalsefromString(char *STRING);
 
