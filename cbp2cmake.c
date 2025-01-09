@@ -9,6 +9,9 @@
  Da ich nicht wirklich ein Programm dafuer gefunden habe ... Eigene nicht 100% Loesung, aber für
  mich das Richtige
 
+ kann mit folgendem benutzt werden:
+ mkdir -p build && cd build && /usr/bin/rm -r -d -f CMakeFiles/ && rm -f * && cmake ../CMakeLists.txt && make && cd ..
+
 --[ HS: Devoloper Notes ]--------------------------------------------------------------------------
 
 ** FindCairo.cmake
@@ -17,6 +20,7 @@
 -m ../hsim/CMakeLists.txt -c ../hsim/hsim.cbp -r -t Release  -p /tmp
 -m ../../gui/hsvc/CMakeLists.txt -c ../../gui/hsvc/hsvc.cbp -r -t Release -p /tmp
 -m ../hswatchd/CMakeLists.txt -c ../hswatchd/hswatchd.cbp -r -t Release  -p /tmp
+-m ../hsgeo/CMakeLists.txt -c ../hsgeo/hsgeo.cbp -r -t Release  -p /tmp
 
 --[ Revision ]-------------------------------------------------------------------------------------
 
@@ -29,6 +33,7 @@
  ** 10.04.24 HS directory's aus hsinstall interpretieren
  ** 14.04.24 HS git -g und -f mit app.ini statt .git
  ** 25.04.24 HS add cfgThreadsLib option
+ ** 09.01.25 HS add libX11 und libXt option von *.cbp
 
 ************************************************************************************************ */
 
@@ -54,6 +59,8 @@ bool cfgWXlib=false;                                        // gefunden: <Add op
 bool cfgCairoLib=false;                                     // gefunden: <Add library="cairo"
 bool cfgSqlite3Lib=false;                                   // gefunden: <Add library="sqlite3"
 bool cfgThreadsLib=false;                                   // gefunden: <Add option=-pthread"
+bool cfgX11Lib=false;                                       // gefunden: <Add library="X11"
+bool cfgXtLib=false;                                        // gefunden: <Add library="Xt"
 bool cfgCTCC=false;                                         // tcc statt gcc - geht leider so nicht
 
 char **Defines=NULL;                                        // -DBigBossCode gefunden
@@ -317,6 +324,23 @@ int readCBP(void)
             continue;
         }
 
+        if (!strncasecmp(rs->nextline,"<Add library=\"X11\"",18))
+        {
+#ifdef xHS_DEBUG
+            printf ("*: X11-Found\n");
+#endif
+            cfgX11Lib=true;
+            continue;
+        }
+        if (!strncasecmp(rs->nextline,"<Add library=\"Xt\"",17))
+        {
+#ifdef xHS_DEBUG
+            printf ("*: Xt-Found\n");
+#endif
+            cfgXtLib=true;
+            continue;
+        }
+
         if (!strncmp(rs->nextline,"<Option ",8)) continue;
         if (!strncmp(rs->nextline,"<Add option=",12)) continue;
         if (!strncmp(rs->nextline,"<Add before=",12)) continue;
@@ -391,7 +415,7 @@ int WriteCmakeFile(void)
     if (!cfgCMakeFile) return True;
     if ((FileOK(cfgCMakeFile)) && (!cfgReplaceOutPut))
     {
-        printf ("%s File exist -- ", cfgCMakeFile);
+        printf ("%s File exist (use -r to overwrite) -- ", cfgCMakeFile);
         return False;
     }
 
@@ -453,6 +477,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
             *destdir='\0';
             destdir++;
             prefix=cfgDestPath;
+            if (*prefix=='/') prefix++;                                         // remove '/' in front
         }
     } else if (!strcmp(cfgDestOpt, "usrbin"))
     {
@@ -512,6 +537,16 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
         for (i=0;Defines[i];i++)
         {
             fprintf (F,"add_definitions(-D%s)\n", Defines[i]);
+        }
+    }
+
+    if (cfgX11Lib)
+    {
+        fprintf (F,"include (${CMAKE_ROOT}/Modules/FindX11.cmake)\n");
+        fprintf (F,"message(\"X11_FOUND: ${X11_FOUND}\")\n");
+        if (cfgXtLib)
+        {
+            fprintf (F,"message(\"X11_Xt_FOUND: ${X11_Xt_FOUND}\")\n");
         }
     }
 
@@ -576,6 +611,20 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
         fprintf(F,"  target_link_libraries(%s ${wxWidgets_LIBRARIES})\n", Cbasename(cfgOutputName));
         fprintf(F,"else()\n");
         fprintf(F," message( FATAL_ERROR \"WX-Config not found\\n\" )\n");
+        fprintf(F,"endif()\n");
+    }
+    if (cfgX11Lib)
+    {
+        fprintf(F,"if(X11_FOUND)\n");
+        fprintf(F,"  add_definitions(-DCMAKE_HAS_X)\n");
+        fprintf(F,"  include_directories(${X11_INCLUDE_DIR})\n");
+        fprintf(F,"  target_link_libraries(%s ${X11_LIBRARIES})\n", Cbasename(cfgOutputName));
+        if (cfgXtLib)
+        {
+            fprintf(F,"  if(X11_Xt_FOUND)\n");
+            fprintf(F,"    target_link_libraries(%s ${X11_Xt_LIB})\n", Cbasename(cfgOutputName));
+            fprintf(F,"  endif()\n");
+        }
         fprintf(F,"endif()\n");
     }
     fprintf (F,"install(TARGETS %s RUNTIME DESTINATION %s)\n", Cbasename(cfgOutputName),destdir);
@@ -705,7 +754,7 @@ signed int main(int argc, char *argv[])
     if (!cfgOutputName) return 255|cleanup()|printf("no OutputFile found - use -o Option");
 
     //write CMakeFile.txt
-    if (!WriteCmakeFile()) return 255|cleanup()|printf("cMakeFile not or wrong");
+    if (!WriteCmakeFile()) return 255|cleanup()|printf("cMakeFile not or wrong\n");
     printf ("Done\n");
     //printf ("Result=%s\n",cfgCodeBlocksProjectFile);
 #ifdef HS_DEBUG
