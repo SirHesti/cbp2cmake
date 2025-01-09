@@ -1,4 +1,4 @@
-# 09.01.2025 15:29:48 Genrated by cbp2cmake V2.7.0 Finale X86 
+# 09.01.2025 15:43:21 Genrated by cbp2cmake V2.7.0 Finale X86 
 project(cbp2cmake LANGUAGES C)
 cmake_minimum_required(VERSION 3.0 FATAL_ERROR)
 set (CMAKE_INSTALL_PREFIX /usr )

@@ -30,9 +30,10 @@ supported libraries:
 - Cairo
 - Sqlite3
 - Threads
-
+- X11/Xt
 
 <a name="anker-German"></a>
+Deutsche Version
 
 cbp2cmake generiert eine CMakeLists.txt ohne das CodeBlocks installiert sein muss.
 Einzig eine [project].cbp ist nötig. Durch einige Schalter können
@@ -61,3 +62,4 @@ unterstütze Libraries:
 - Cairo
 - Sqlite3
 - Threads
+- X11/Xt
