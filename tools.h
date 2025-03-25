@@ -668,6 +668,8 @@ int ChkARG(char *Find, int arguc, char *arguv[]);
 int aChkARG(char *Find);
 int ChkARGlong(char *Find, int argc, char *argv[]);
 int aChkARGlong(char *Find);
+int ChkARGwide(char *Find, int argc, char *argv[]);
+int aChkARGwide(char *Find);
 
 // die LogPrint-Version
 int lprintf(char *fmt, ...);  // der (interne) Lognachrichten Aufruf

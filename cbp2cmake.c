@@ -540,16 +540,21 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
         }
     }
 
+    //https://github.com/Kitware/CMake/blob/master/Tests/X11/CMakeLists.txt ohne APPLE
     if (cfgX11Lib)
     {
-        fprintf (F,"include (${CMAKE_ROOT}/Modules/FindX11.cmake)\n");
-        fprintf (F,"message(\"X11_FOUND: ${X11_FOUND}\")\n");
+        fprintf(F,"include (${CMAKE_ROOT}/Modules/FindX11.cmake)\n");
+        fprintf(F,"if(NOT X11_FOUND)\n");
+        fprintf(F,"  message(\"X11_FOUND: ${X11_FOUND}\")\n");
+        fprintf(F,"endif()\n");
+
         if (cfgXtLib)
         {
-            fprintf (F,"message(\"X11_Xt_FOUND: ${X11_Xt_FOUND}\")\n");
+            fprintf(F,"if(NOT X11_Xt_FOUND)\n");
+            fprintf(F,"  message(\"X11_Xt_FOUND: ${X11_Xt_FOUND}\")\n");
+            fprintf(F,"endif()\n");
         }
     }
-
     fprintf (F,"add_executable(%s", Cbasename(cfgOutputName));
 
     if (Files)

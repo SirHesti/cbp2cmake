@@ -1073,7 +1073,6 @@ int ChkARGwStart(char *Find, int start, int arguc, char *arguv[])
             return 0;
         }
         return p;
-
     }
     return 0;
 }
@@ -1085,7 +1084,7 @@ int ChkARGwStart(char *Find, int start, int arguc, char *arguv[])
  long Parameter nun genauso flexibel, wird shortparameter verwendet
  werden.
 
- Es können in der long--version nur doppelte Minuszeichen verwendet werden.
+ Es können in der long--version nur  doppelte Minuszeichen verwendet werden.
  Folgende Schreibweisen sind zulässig:
 
  @code
@@ -1112,14 +1111,21 @@ int ChkARGwStart(char *Find, int start, int arguc, char *arguv[])
 ___[ Revision ]______________________________________________________________
 
  ** 22.03.20 HS Create
+ ** 28.02.25 HS Rename ... um long & wide zu ermöglichen
 _____________________________________________________________________________*/
 
-int ChkARGlong(char *Find, int argc, char *argv[])
+int ChkARGlongOrWide(int sz, char *Find, int argc, char *argv[])
 {
     int p;
     int l;
     int br;
     char *src;
+    char *cmppar;
+
+    switch (sz) {
+        case 1:   sz=1; cmppar="-";  break;
+        default:  sz=2; cmppar="--"; break;
+    }
 
     ARG = NULL;
 
@@ -1127,8 +1133,13 @@ int ChkARGlong(char *Find, int argc, char *argv[])
     {
         if (p>=argc) break;                                                     // Ende ?
         src = argv[p];                                                          // Durch die Übergebenen Parameter hangeln
-        if (strncmp(src,"--",2)) continue;                                      // Ist es ein long Parameter ?
-        src += 2;                                                               // "--" überlesen
+
+//        if (strncmp(src,"--",2)) continue;                                      // Ist es ein long Parameter ?
+//        src += 2;                                                               // "--" überlesen
+
+        if (strncmp(src,cmppar,sz)) continue;                                   // Ist es ein long Parameter ?
+        src += sz;                                                              // "--" überlesen
+
         br = 0;                                                                 // br = 0 = Kein angehängtes Argument
         for (l=0;;l++)
         {
@@ -1201,9 +1212,21 @@ ___[ Revision ]______________________________________________________________
  ** 09.07.20 HS neu
 _____________________________________________________________________________*/
 
+int ChkARGlong(char *Find, int argc, char *argv[])
+{
+    return ChkARGlongOrWide(2, Find, argc, argv);
+}
 int aChkARGlong(char *Find)
 {
     return ChkARGlong(Find, m_PRG_argc, m_PRG_arguv);
+}
+int ChkARGwide(char *Find, int argc, char *argv[])
+{
+    return ChkARGlongOrWide(1, Find, argc, argv);
+}
+int aChkARGwide(char *Find)
+{
+    return ChkARGwide(Find, m_PRG_argc, m_PRG_arguv);
 }
 ///@}
 
