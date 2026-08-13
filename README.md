@@ -1,3 +1,5 @@
+**Project is moved** to   https://codeberg.org/Hesti/cbp2cmake
+
 # CodeBlocksProject2Cmake - cbp2cmake
 <a name="anker-English"></a>
 [German Translation](#anker-German)<br>
